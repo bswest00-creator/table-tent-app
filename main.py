@@ -22,15 +22,15 @@ SCOPES = [
 ]
 
 def get_google_client():
-    """
-    Reads credentials from environment variable (Render-safe approach)
-    """
     creds_json = os.getenv("GOOGLE_CREDS_JSON")
 
     if not creds_json:
-        raise Exception("Missing GOOGLE_CREDS_JSON environment variable")
+        raise Exception("Missing GOOGLE_CREDS_JSON")
 
-    creds_dict = json.loads(creds_json)
+    try:
+        creds_dict = json.loads(creds_json)
+    except Exception as e:
+        raise Exception(f"Invalid GOOGLE_CREDS_JSON format: {e}")
 
     creds = Credentials.from_service_account_info(
         creds_dict,
