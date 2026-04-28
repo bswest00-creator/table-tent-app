@@ -9,7 +9,11 @@ import uuid
 from docx import Document
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+import os
+from fastapi.templating import Jinja2Templates
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # -----------------------------
 # GOOGLE SHEETS CONFIG
