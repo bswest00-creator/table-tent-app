@@ -1,27 +1,36 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
-app = FastAPI()
+import gspread
+from google.oauth2.service_account import Credentials
 
+import uuid
+from docx import Document
+
+app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-# ----------------------------
-# GOOGLE SHEETS CONNECTION
-# ----------------------------
+# -----------------------------
+# GOOGLE SHEETS CONFIG
+# -----------------------------
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+SHEET_NAME = "Table Tent Menu DB"
 
+menu_db = None  # lazy-loaded cache
+
+
+# -----------------------------
+# GOOGLE SHEETS CONNECTION
+# -----------------------------
 def get_sheet():
     creds = Credentials.from_service_account_file(
         "service_account.json",
         scopes=SCOPES
     )
-    client = gspread.authorize(creds)
 
-    sheet = client.open("Table Tent Menu DB").sheet1
+    client = gspread.authorize(creds)
+    sheet = client.open(SHEET_NAME).sheet1
     return sheet
 
 
@@ -36,18 +45,32 @@ def load_menu():
     return menu
 
 
-menu_db = load_menu()
+def get_menu():
+    global menu_db
+    if menu_db is None:
+        menu_db = load_menu()
+    return menu_db
 
 
-# ----------------------------
-# CORE GENERATOR
-# ----------------------------
+# -----------------------------
+# WEB UI
+# -----------------------------
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+# -----------------------------
+# CORE GENERATION LOGIC
+# -----------------------------
 def generate_table_tents(items):
-    output_file = f"output_{uuid.uuid4().hex}.docx"
+    menu = get_menu()
+
+    output_file = f"table_tents_{uuid.uuid4().hex}.docx"
     doc = Document()
 
     for item in items:
-        record = menu_db.get(item.lower())
+        record = menu.get(item.lower())
 
         if not record:
             continue
@@ -62,24 +85,22 @@ def generate_table_tents(items):
     return output_file
 
 
-# ----------------------------
-# TEMP INPUT (replace later with PDF + AI)
-# ----------------------------
+# -----------------------------
+# TEMP TEST DATA (replace later with AI)
+# -----------------------------
 def parse_order():
     return ["grilled chicken", "caesar salad"]
 
 
-# ----------------------------
-# API
-# ----------------------------
-@app.get("/")
-def home():
-    return {"status": "running"}
-
-
+# -----------------------------
+# API ENDPOINT
+# -----------------------------
 @app.get("/generate")
 def generate():
     items = parse_order()
     file_path = generate_table_tents(items)
 
-    return FileResponse(file_path, filename="table_tents.docx")
+    return FileResponse(
+        file_path,
+        filename="table_tents.docx"
+    )
