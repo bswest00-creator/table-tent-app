@@ -1,16 +1,275 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Table Tents</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Table Tent Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #f5f3ef;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 3rem;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 0.75rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      color: #1a1a1a;
+      margin-bottom: 0.4rem;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: #777;
+      margin-bottom: 2rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 2.5rem 1.5rem;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1.5rem;
+    }
+
+    .drop-zone:hover, .drop-zone.dragging {
+      border-color: #888;
+      background: #faf9f7;
+    }
+
+    .drop-zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .drop-zone p {
+      color: #555;
+      font-size: 0.95rem;
+    }
+
+    .drop-zone .filename {
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      color: #333;
+      font-weight: bold;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #2c2c2c;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 0.8rem 2rem;
+      font-size: 1rem;
+      font-family: Georgia, serif;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+    }
+
+    .btn:hover { background: #444; }
+    .btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: transparent;
+      color: #555;
+      border: 1px solid #ccc;
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+    }
+
+    .btn-secondary:hover { background: #f5f5f5; }
+
+    .status {
+      margin-top: 1.25rem;
+      font-size: 0.9rem;
+      min-height: 1.4em;
+    }
+
+    .status.loading { color: #888; }
+    .status.error   { color: #c0392b; }
+    .status.success { color: #27ae60; }
+
+    .unmatched {
+      margin-top: 1rem;
+      background: #fff8e1;
+      border-radius: 6px;
+      padding: 1rem;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    .unmatched strong { color: #c0392b; }
+    .unmatched ul { margin-top: 0.4rem; padding-left: 1.2rem; color: #555; }
+
+    hr {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 1.5rem 0;
+    }
+  </style>
 </head>
 <body>
-    <h1>Table Tent Generator</h1>
 
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <button type="submit">Upload Order PDF</button>
-    </form>
+<div class="card">
+  <div class="logo">baker's best catering</div>
+  <h1>Table Tent Generator</h1>
+  <p class="subtitle">Upload an order PDF to generate print-ready table tents.</p>
 
-    <p>System running.</p>
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📄</div>
+    <p>Drag & drop your order PDF here<br/>or click to browse</p>
+    <div class="filename" id="fileName"></div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".pdf" />
+
+  <button class="btn" id="generateBtn" disabled onclick="generate()">Generate Table Tents</button>
+  <button class="btn btn-secondary" id="previewBtn" disabled onclick="preview()">Preview Matched Items (JSON)</button>
+
+  <div class="status" id="status"></div>
+  <div id="unmatchedBox"></div>
+</div>
+
+<script>
+  const dropZone   = document.getElementById('dropZone');
+  const fileInput  = document.getElementById('fileInput');
+  const fileName   = document.getElementById('fileName');
+  const genBtn     = document.getElementById('generateBtn');
+  const prevBtn    = document.getElementById('previewBtn');
+  const status     = document.getElementById('status');
+  const unmatchedBox = document.getElementById('unmatchedBox');
+  let selectedFile = null;
+
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragging');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragging');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.pdf')) setFile(file);
+    else showStatus('Please drop a PDF file.', 'error');
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(file) {
+    selectedFile = file;
+    fileName.textContent = file.name;
+    genBtn.disabled = false;
+    prevBtn.disabled = false;
+    status.textContent = '';
+    unmatchedBox.innerHTML = '';
+  }
+
+  async function generate() {
+    if (!selectedFile) return;
+    genBtn.disabled = true;
+    showStatus('Generating table tents…', 'loading');
+    unmatchedBox.innerHTML = '';
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/generate', { method: 'POST', body: form });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'table_tents.pdf';
+        a.click();
+        showStatus('✓ PDF downloaded!', 'success');
+      } else {
+        const data = await res.json();
+        showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      showStatus('Network error: ' + err.message, 'error');
+    }
+
+    genBtn.disabled = false;
+  }
+
+  async function preview() {
+    if (!selectedFile) return;
+    prevBtn.disabled = true;
+    showStatus('Fetching preview…', 'loading');
+    unmatchedBox.innerHTML = '';
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/preview', { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (res.ok) {
+        showStatus(`✓ Found ${data.matched_items.length} item(s), ${data.unmatched.length} unmatched.`, 'success');
+        if (data.unmatched.length > 0) {
+          unmatchedBox.innerHTML = `
+            <div class="unmatched">
+              <strong>⚠️ Items not found in your Sheet:</strong>
+              <ul>${data.unmatched.map(n => `<li>${n}</li>`).join('')}</ul>
+              <p style="margin-top:0.5rem;color:#888">Check spelling or add these to your Google Sheet.</p>
+            </div>`;
+        }
+        console.log('Full preview data:', data);
+      } else {
+        showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      showStatus('Network error: ' + err.message, 'error');
+    }
+
+    prevBtn.disabled = false;
+  }
+
+  function showStatus(msg, type) {
+    status.textContent = msg;
+    status.className = 'status ' + type;
+  }
+</script>
+
 </body>
 </html>
