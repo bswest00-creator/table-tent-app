@@ -8,7 +8,6 @@ from google.oauth2.service_account import Credentials
 import uuid
 from docx import Document
 
-app = FastAPI()
 import os
 from fastapi.templating import Jinja2Templates
 
