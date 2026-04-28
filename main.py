@@ -1,80 +1,23 @@
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
+from google_sheets import load_menu_from_sheet
 
-import os
-import json
-import gspread
-from google.oauth2.service_account import Credentials
-
-# -----------------------
-# APP INIT (MUST BE FIRST)
-# -----------------------
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
 
-# -----------------------
-# GOOGLE SHEETS SETUP
-# -----------------------
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
 
-def get_google_client():
-    creds_json = os.getenv("GOOGLE_CREDS_JSON")
+@app.get("/")
+def home():
+    return {"status": "running"}
 
-    if not creds_json:
-        raise Exception("Missing GOOGLE_CREDS_JSON")
-
-    try:
-        creds_dict = json.loads(creds_json)
-    except Exception as e:
-        raise Exception(f"Invalid GOOGLE_CREDS_JSON format: {e}")
-
-    creds = Credentials.from_service_account_info(
-        creds_dict,
-        scopes=SCOPES
-    )
-
-    return gspread.authorize(creds)
-
-def get_menu_data():
-    client = get_google_client()
-
-    # CHANGE THIS to your sheet name
-    sheet = client.open("Table Tents").worksheet("Menu")
-
-    return sheet.get_all_records()
-
-# -----------------------
-# ROUTES
-# -----------------------
-
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request}
-    )
 
 @app.get("/menu")
 def menu():
     try:
-        data = get_menu_data()
-        return JSONResponse(content=data)
+        data = load_menu_from_sheet()
+        return JSONResponse(content={"menu": data})
+
     except Exception as e:
-        return JSONResponse(content={"error": str(e)})
-
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """
-    Placeholder for future PDF parsing + AI generation
-    """
-    content = await file.read()
-
-    return {
-        "filename": file.filename,
-        "size": len(content),
-        "status": "received"
-    }
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
